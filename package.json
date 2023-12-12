@@ -1,0 +1,26 @@
+{
+  "name": "httpapi",
+  "version": "0.0.1",
+  "description": "Http api",
+  "type": "module",
+  "scripts": {
+    "test": "npm --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ilushling/HttpApi.git"
+  },
+  "keywords": [
+    "http",
+    "api"
+  ],
+  "author": "Ilushling",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Ilushling/HttpApi/issues"
+  },
+  "homepage": "https://github.com/Ilushling/HttpApi#readme",
+  "devDependencies": {
+    "@types/node": "^20.10.4"
+  }
+}
