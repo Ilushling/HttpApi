@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "Http api",
   "type": "module",
+  "main": "./src/HttpApi.js",
   "scripts": {
     "test": "node --test"
   },
@@ -21,6 +22,6 @@
   },
   "homepage": "https://github.com/Ilushling/HttpApi#readme",
   "devDependencies": {
-    "@types/node": "^20.10.4"
+    "@types/node": "^20.10.5"
   }
 }
