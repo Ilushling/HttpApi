@@ -1,52 +1,36 @@
 /**
- * @TODO
- * @typedef {any} Logger
+ * @typedef {import('./IHttpApi.js').ResponseType} ResponseType
+ * @typedef {import('./IHttpApi.js').Headers} Headers
+ * 
+ * @typedef {import('./IHttpApi.js').HttpApiProperties} HttpApiProperties
+ * @typedef {import('./IHttpApi.js').HttpApiParams} HttpApiParams
  */
 
 /**
- * @typedef {'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'OPTIONS'} HttpMethod
- */
-
-/**
- * @typedef {Record<string, string>} HttpHeaders
- */
-
-/**
- * @typedef {'json'|'text'|'arrayBuffer'} ResponseType
- */
-
-/**
- * @typedef {Record<string, string>} ResponseHeaders
- */
-
-/**
- * @typedef {object} RequestOptions
- * @property {string} url
- * @property {HttpMethod=} method
- * @property {HttpHeaders=} headers
- * @property {string|object|ArrayBuffer=} data
- * @property {ResponseType=} responseType
- */
-
-/**
- * @typedef {object} HttpApiParams
- * @property {Logger=} logger
- * @property {boolean=} isLog
+ * @typedef {import('./IHttpApi.js').IHttpApi} IHttpApi
+ * 
+ * @implements {IHttpApi}
  */
 export default class HttpApi {
-  /** @type {Logger=} */
+  // Dependencies
+  /** @type {HttpApiProperties['logger']} */
   #logger;
 
-  /** @type {boolean} */
+  // Configs
+  /** @type {HttpApiProperties['isLog']} */
   #isLog;
 
   /** @param {HttpApiParams} params */
   constructor({
-    logger,
-    isLog = false
+    logger
   } = {}) {
     this.#logger = logger;
-    this.#isLog = isLog;
+    this.#isLog = false;
+  }
+
+  /** @type {IHttpApi['setup']} */
+  setup({ configs }) {
+    this.#isLog = configs.isLog;
   }
 
   #getLogger() {
@@ -57,10 +41,7 @@ export default class HttpApi {
     return this.#logger;
   }
 
-
-  /**
-   * @param {RequestOptions} options
-   */
+  /** @type {IHttpApi['request']} */
   async request({ url, method, headers, data, responseType }) {
     const logger = this.#getLogger();
 
@@ -92,7 +73,7 @@ export default class HttpApi {
     };
 
     logger?.info('Http request');
-    logger?.debug({
+    logger?.trace({
       url,
       method,
       headers,
@@ -126,7 +107,7 @@ export default class HttpApi {
     const responseStatus = response.status;
     const responseStatusText = response.statusText;
 
-    logger?.debug({
+    logger?.trace({
       responseHeaders,
       responseStatus,
       responseStatusText,
@@ -142,7 +123,7 @@ export default class HttpApi {
     } catch (e) {
       responseData = await sourceResponse.text();
 
-      logger?.debug({
+      logger?.trace({
         responseData
       });
 
@@ -151,7 +132,7 @@ export default class HttpApi {
       });
     }
 
-    logger?.debug({
+    logger?.trace({
       responseData
     });
 
@@ -165,7 +146,7 @@ export default class HttpApi {
 
   /**
    * @param {Response} response
-   * @param {ResponseHeaders} responseHeaders
+   * @param {Headers} responseHeaders
    * @param {ResponseType=} responseType
    */
   async #parseResponseData(response, responseHeaders, responseType) {
