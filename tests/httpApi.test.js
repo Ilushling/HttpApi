@@ -1,4 +1,4 @@
-import HttpApi from "../src/HttpApi.js";
+import HttpApi from '../src/HttpApi.js';
 
 // @TODO tests
 const logger = console;

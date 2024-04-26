@@ -1,17 +1,23 @@
 /**
- * @typedef {import('./IHttpApi.js').ResponseType} ResponseType
- * @typedef {import('./IHttpApi.js').Headers} Headers
- * 
- * @typedef {import('./IHttpApi.js').HttpApiProperties} HttpApiProperties
- * @typedef {import('./IHttpApi.js').HttpApiParams} HttpApiParams
- */
-
-/**
- * @typedef {import('./IHttpApi.js').IHttpApi} IHttpApi
- * 
  * @implements {IHttpApi}
  */
 export default class HttpApi {
+  /**
+   * @typedef {import('./IHttpApi.js').IHttpApi} IHttpApi
+   */
+
+  /**
+   * @typedef {import('./IHttpApi.js').ResponseType} ResponseType
+   * @typedef {import('./IHttpApi.js').Headers} Headers
+   * 
+   * @typedef {import('./IHttpApi.js').HttpApiProperties} HttpApiProperties
+   * @typedef {import('./IHttpApi.js').HttpApiParams} HttpApiParams
+   */
+
+  /**
+   * @typedef {import('mainlog').LoggerOptions} LoggerOptions
+   */
+
   // Dependencies
   /** @type {HttpApiProperties['logger']} */
   #logger;
@@ -25,61 +31,67 @@ export default class HttpApi {
     logger
   } = {}) {
     this.#logger = logger;
+
     this.#isLog = false;
   }
 
+  //#region Interface
   /** @type {IHttpApi['setup']} */
-  setup({ configs }) {
-    this.#isLog = configs.isLog;
-  }
-
-  #getLogger() {
-    if (!this.#isLog) {
-      return;
-    }
-
-    return this.#logger;
+  setup({ isLog }) {
+    this.#isLog = isLog;
   }
 
   /** @type {IHttpApi['request']} */
-  async request({ url, method, headers, data, responseType }) {
+  async request({ url, method, headers, data, responseType, traceId }) {
     const logger = this.#getLogger();
+    const loggerOptions = logger != null ? this.getLoggerOptions({ traceId }) : undefined;
 
     if (data != null) {
       const dataType = typeof data;
 
-      headers ??= {};
-
       const dataTypes = {
         object: () => {
           if (!(data instanceof ArrayBuffer)) {
-            data = JSON.stringify(data);
-          }
+            headers ??= {};
 
-          headers['Content-Type'] ??= 'application/json';
+            headers['Content-Type'] ??= 'application/json';
+
+            return JSON.stringify(data);
+          }
         },
         string: () => {
-          data = JSON.stringify(data);
+          return JSON.stringify(data);
         }
       };
 
-      dataTypes[dataType]();
+      /**
+       * @template {string} T
+       * @param {T} dataType
+       * @returns {T is keyof typeof dataTypes}
+       */
+      const isDataType = dataType => dataType in dataTypes;
+      if (isDataType(dataType)) {
+        data = dataTypes[/** @type {keyof typeof dataTypes} */ (dataType)]();
+      }
     }
 
+    const body = /** @type {string | ArrayBuffer} */ (data);
+
+    /** @type {RequestInit} */
     const fetchOptions = {
       method,
       headers,
-      body: data
+      body
     };
 
-    logger?.info('Http request');
-    logger?.trace({
+    logger?.info('Http request', loggerOptions);
+    logger?.debug({
       url,
       method,
       headers,
       data,
       responseType
-    });
+    }, loggerOptions);
 
     const startTime = Date.now();
 
@@ -89,30 +101,38 @@ export default class HttpApi {
     } catch (e) {
       const totalTime = Date.now() - startTime;
 
-      logger?.error({
-        message: 'Http request error',
-        time: totalTime
-      });
+      const error = Object.assign(
+        new Error(
+          'Http request error',
+          {
+            cause: {
+              time: totalTime
+            }
+          }),
+        {
+          name: 'HttpRequestError'
+        }
+      );
 
-      throw Object.assign(new Error('Http request error'), {
-        name: 'HttpRequestError'
-      });
+      logger?.error(error, loggerOptions);
+
+      throw error;
     }
 
     const totalTime = Date.now() - startTime;
 
-    logger?.info('Http response');
+    logger?.info('Http response', loggerOptions);
 
     const responseHeaders = Object.fromEntries(response.headers);
     const responseStatus = response.status;
     const responseStatusText = response.statusText;
 
-    logger?.trace({
+    logger?.debug({
       responseHeaders,
       responseStatus,
       responseStatusText,
       time: totalTime
-    });
+    }, loggerOptions);
 
     const sourceResponse = response;
     response = response.clone();
@@ -121,20 +141,22 @@ export default class HttpApi {
     try {
       responseData = await this.#parseResponseData(response, responseHeaders, responseType);
     } catch (e) {
-      responseData = await sourceResponse.text();
+      if (logger != null) {
+        responseData = await sourceResponse.text();
 
-      logger?.trace({
-        responseData
+        logger.debug({ responseData }, loggerOptions);
+      }
+
+      const error = Object.assign(new Error('Http response parse error'), {
+        name: 'HttpResponseParseError'
       });
 
-      throw Object.assign(new Error('Http parse response data error'), {
-        name: 'HttpParseResponseDataError'
-      });
+      logger?.error(error, loggerOptions);
+
+      throw error;
     }
 
-    logger?.trace({
-      responseData
-    });
+    logger?.debug({ responseData }, loggerOptions);
 
     return {
       headers: responseHeaders,
@@ -143,30 +165,63 @@ export default class HttpApi {
       statusText: responseStatusText
     };
   }
+  //#endregion
+
+  //#region Utils
+  #getLogger() {
+    if (!this.#isLog) {
+      return;
+    }
+
+    return this.#logger;
+  }
 
   /**
+   * @typedef {object | string | number | boolean | null} JsonType
+   * 
    * @param {Response} response
    * @param {Headers} responseHeaders
    * @param {ResponseType=} responseType
+   * @returns {Promise<JsonType | JsonType[]>}
    */
   async #parseResponseData(response, responseHeaders, responseType) {
     if (responseType == null) {
       const contentType = responseHeaders['Content-Type'] ?? responseHeaders['content-type'];
       const contentTypes = {
-        'application/json': 'json',
-        'application/json; charset=utf-8': 'json',
-        'application/octet-stream': 'arrayBuffer'
+        'application/json': /** @type {'json'} */ ('json'),
+        'application/json; charset=utf-8': /** @type {'json'} */ ('json'),
+        'application/octet-stream': /** @type {'arrayBuffer'} */ ('arrayBuffer')
       }
 
-      responseType = /** @type {ResponseType} */ (contentTypes[contentType] ?? 'text');
+      if (contentType in contentTypes) {
+        responseType = contentTypes[/** @type {keyof typeof contentTypes} */(contentType)];
+      } else {
+        responseType = 'text';
+      }
     }
 
+    /**
+     */
     const responseTypes = {
-      json: () => response.json(),
+      json: () => /** @type {Promise<JsonType | JsonType[]>} */(response.json()),
       text: () => response.text(),
       arrayBuffer: () => response.arrayBuffer()
     };
 
     return responseTypes[responseType]();
   }
+
+  /**
+   * @param {object} params
+   * @param {string} params.traceId
+   * @returns {LoggerOptions}
+   */
+  getLoggerOptions({ traceId }) {
+    return {
+      metadata: {
+        correlationId: traceId
+      }
+    };
+  }
+  //#endregion
 }
