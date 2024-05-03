@@ -213,7 +213,7 @@ export default class HttpApi {
 
   /**
    * @param {object} params
-   * @param {string} params.traceId
+   * @param {string=} params.traceId
    * @returns {LoggerOptions}
    */
   getLoggerOptions({ traceId }) {
