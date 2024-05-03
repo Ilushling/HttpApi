@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/Ilushling/HttpApi#readme",
   "devDependencies": {
-    "@types/node": "^20.12.7",
+    "@types/node": "^20.12.8",
     "mainlog": "^1.5.0"
   }
 }

@@ -18,32 +18,17 @@ export default class HttpApi {
    * @typedef {import('mainlog').LoggerOptions} LoggerOptions
    */
 
-  // Dependencies
   /** @type {HttpApiProperties['logger']} */
   #logger;
 
-  // Configs
-  /** @type {HttpApiProperties['isLog']} */
-  #isLog;
-
   /** @param {HttpApiParams} params */
-  constructor({
-    logger
-  } = {}) {
+  constructor({ logger } = {}) {
     this.#logger = logger;
-
-    this.#isLog = false;
-  }
-
-  //#region Interface
-  /** @type {IHttpApi['setup']} */
-  setup({ isLog }) {
-    this.#isLog = isLog;
   }
 
   /** @type {IHttpApi['request']} */
   async request({ url, method, headers, data, responseType, traceId }) {
-    const logger = this.#getLogger();
+    const logger = this.#logger;
     const loggerOptions = logger != null ? this.getLoggerOptions({ traceId }) : undefined;
 
     if (data != null) {
@@ -168,14 +153,6 @@ export default class HttpApi {
   //#endregion
 
   //#region Utils
-  #getLogger() {
-    if (!this.#isLog) {
-      return;
-    }
-
-    return this.#logger;
-  }
-
   /**
    * @typedef {object | string | number | boolean | null} JsonType
    * 
@@ -200,8 +177,6 @@ export default class HttpApi {
       }
     }
 
-    /**
-     */
     const responseTypes = {
       json: () => /** @type {Promise<JsonType | JsonType[]>} */(response.json()),
       text: () => response.text(),

@@ -1,23 +1,19 @@
 /**
  * @typedef {object} IHttpApi
- * @property {(params: HttpApiSetupParams) => void} setup
  * @property {(options: HttpRequestOptions) => Promise<HttpResponse>} request
+ */
+
+/**
+ * @typedef {new (params: HttpApiParams) => IHttpApi} HttpApiConstructable
  */
 
 /**
  * @typedef {object} HttpApiDependencies
  * @property {ILogger=} logger
  * 
- * @typedef {HttpApiDependencies & HttpApiConfigs} HttpApiProperties
+ * @typedef {HttpApiDependencies} HttpApiProperties
  * 
- * @typedef {object} HttpApiParams
- * @property {ILogger=} logger
- * 
- * @typedef {object} HttpApiConfigs
- * @property {boolean} isLog
- * 
- * @typedef {object} HttpApiSetupParams
- * @property {boolean} isLog
+ * @typedef {HttpApiProperties} HttpApiParams
  */
 
 /**
