@@ -1,6 +1,6 @@
 {
   "name": "httpapix",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "description": "Http api",
   "type": "module",
   "main": "./index.js",
