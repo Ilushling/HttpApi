@@ -4,23 +4,6 @@
  */
 
 /**
- * @typedef {new (params: HttpApiParams) => IHttpApi} HttpApiConstructable
- */
-
-/**
- * @typedef {object} HttpApiDependencies
- * @property {ILogger=} logger
- * 
- * @typedef {HttpApiDependencies} HttpApiProperties
- * 
- * @typedef {HttpApiProperties} HttpApiParams
- */
-
-/**
- * @typedef {import('mainlog').ILogger} ILogger
- */
-
-/**
  * @typedef {object} HttpRequestOptions
  * @property {string} url
  * @property {HttpMethod=} method

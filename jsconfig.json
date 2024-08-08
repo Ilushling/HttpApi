@@ -6,7 +6,8 @@
     "moduleResolution": "NodeNext", /* Specify how TypeScript looks up a file from a given module specifier. */
     /* JavaScript Support */
     "checkJs": true, /* Enable error reporting in type-checked JavaScript files. */
-    "strict": true
+    "strict": true,
+    "noImplicitAny": true
   },
   "exclude": ["node_modules"]
 }

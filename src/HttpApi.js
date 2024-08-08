@@ -1,21 +1,31 @@
 /**
+ * @import {
+ *  IHttpApi,
+ *  ResponseType,
+ *  Headers
+ * } from './IHttpApi.js'
+ * 
+ * @import { IDomainLogger, LoggerOptions } from 'mainlog'
+ */
+
+/**
+ * @typedef {new (params: HttpApiParams) => IHttpApi} HttpApiConstructable
+ */
+
+/**
  * @implements {IHttpApi}
  */
 export default class HttpApi {
   /**
-   * @typedef {import('./IHttpApi.js').IHttpApi} IHttpApi
-   */
-
-  /**
-   * @typedef {import('./IHttpApi.js').ResponseType} ResponseType
-   * @typedef {import('./IHttpApi.js').Headers} Headers
+   * @typedef {HttpApiDependencies} HttpApiParams
+   * @typedef {HttpApiDependencies} HttpApiProperties
    * 
-   * @typedef {import('./IHttpApi.js').HttpApiProperties} HttpApiProperties
-   * @typedef {import('./IHttpApi.js').HttpApiParams} HttpApiParams
+   * @typedef {object} HttpApiDependencies
+   * @property {IDomainLogger=} logger
    */
 
   /**
-   * @typedef {import('mainlog').LoggerOptions} LoggerOptions
+   * @typedef {object | string | number | boolean | null} JsonType
    */
 
   /** @type {HttpApiProperties['logger']} */
@@ -26,37 +36,30 @@ export default class HttpApi {
     this.#logger = logger;
   }
 
+  //#region Interfaces
   /** @type {IHttpApi['request']} */
   async request({ url, method, headers, data, responseType, traceId }) {
     const logger = this.#logger;
-    const loggerOptions = logger != null ? this.getLoggerOptions({ traceId }) : undefined;
+    const loggerOptions = logger != null
+      ? this.#getLoggerOptions({ traceId })
+      : undefined;
 
     if (data != null) {
       const dataType = typeof data;
 
-      const dataTypes = {
-        object: () => {
+      switch (dataType) {
+        case 'object':
           if (!(data instanceof ArrayBuffer)) {
             headers ??= {};
 
             headers['Content-Type'] ??= 'application/json';
 
-            return JSON.stringify(data);
+            data = JSON.stringify(data);
           }
-        },
-        string: () => {
-          return JSON.stringify(data);
-        }
-      };
-
-      /**
-       * @template {string} T
-       * @param {T} dataType
-       * @returns {T is keyof typeof dataTypes}
-       */
-      const isDataType = dataType => dataType in dataTypes;
-      if (isDataType(dataType)) {
-        data = dataTypes[/** @type {keyof typeof dataTypes} */ (dataType)]();
+          break;
+        case 'string':
+          data = JSON.stringify(data);
+          break;
       }
     }
 
@@ -69,14 +72,14 @@ export default class HttpApi {
       body
     };
 
-    logger?.info('Http request', loggerOptions);
+    logger?.info('Request', loggerOptions);
     logger?.debug({
       url,
       method,
       headers,
       data,
       responseType
-    }, loggerOptions);
+    }, { prefix: 'Request', metadata: loggerOptions?.metadata });
 
     const startTime = Date.now();
 
@@ -86,62 +89,57 @@ export default class HttpApi {
     } catch (e) {
       const totalTime = Date.now() - startTime;
 
-      const error = Object.assign(
-        new Error(
-          'Http request error',
-          {
-            cause: {
-              time: totalTime
-            }
-          }),
-        {
-          name: 'HttpRequestError'
+      const error = Object.assign(new Error('Http request error', {
+        cause: {
+          time: totalTime
         }
-      );
+      }), {
+        name: 'HttpRequestError'
+      });
 
-      logger?.error(error, loggerOptions);
+      logger?.error(error, { prefix: 'Request', metadata: loggerOptions?.metadata });
 
       throw error;
     }
 
     const totalTime = Date.now() - startTime;
 
-    logger?.info('Http response', loggerOptions);
+    logger?.info({ time: totalTime }, { prefix: 'Response', metadata: loggerOptions?.metadata });
 
     const responseHeaders = Object.fromEntries(response.headers);
     const responseStatus = response.status;
     const responseStatusText = response.statusText;
 
     logger?.debug({
-      responseHeaders,
-      responseStatus,
-      responseStatusText,
-      time: totalTime
-    }, loggerOptions);
+      headers: responseHeaders,
+      status: responseStatus,
+      statusText: responseStatusText
+    }, { prefix: 'Response', metadata: loggerOptions?.metadata });
 
-    const sourceResponse = response;
-    response = response.clone();
+    const clonedResponse = response.clone();
 
     let responseData;
     try {
-      responseData = await this.#parseResponseData(response, responseHeaders, responseType);
+      responseData = await this.#parseResponseData(clonedResponse, responseHeaders, responseType);
     } catch (e) {
-      if (logger != null) {
-        responseData = await sourceResponse.text();
-
-        logger.debug({ responseData }, loggerOptions);
-      }
-
-      const error = Object.assign(new Error('Http response parse error'), {
-        name: 'HttpResponseParseError'
+      const error = Object.assign(new Error(
+        'Http response data parse error'
+      ), {
+        name: 'HttpResponseDataParseError'
       });
 
-      logger?.error(error, loggerOptions);
+      logger?.error(error, { prefix: 'Response data', metadata: loggerOptions?.metadata });
+
+      if (logger != null) {
+        responseData = await response.text();
+
+        logger.debug(responseData, { prefix: 'Response data', metadata: loggerOptions?.metadata });
+      }
 
       throw error;
     }
 
-    logger?.debug({ responseData }, loggerOptions);
+    logger?.debug(responseData, { prefix: 'Response data', metadata: loggerOptions?.metadata });
 
     return {
       headers: responseHeaders,
@@ -152,38 +150,41 @@ export default class HttpApi {
   }
   //#endregion
 
-  //#region Utils
+  //#region Logic
   /**
-   * @typedef {object | string | number | boolean | null} JsonType
-   * 
    * @param {Response} response
    * @param {Headers} responseHeaders
    * @param {ResponseType=} responseType
-   * @returns {Promise<JsonType | JsonType[]>}
+   * @returns {Promise<JsonType | JsonType[] | ArrayBuffer>}
    */
   async #parseResponseData(response, responseHeaders, responseType) {
     if (responseType == null) {
       const contentType = responseHeaders['Content-Type'] ?? responseHeaders['content-type'];
-      const contentTypes = {
-        'application/json': /** @type {'json'} */ ('json'),
-        'application/json; charset=utf-8': /** @type {'json'} */ ('json'),
-        'application/octet-stream': /** @type {'arrayBuffer'} */ ('arrayBuffer')
-      }
 
-      if (contentType in contentTypes) {
-        responseType = contentTypes[/** @type {keyof typeof contentTypes} */(contentType)];
-      } else {
-        responseType = 'text';
+      switch (contentType) {
+        case 'application/json':
+          responseType = 'json';
+          break;
+        case 'application/json; charset=utf-8':
+          responseType = 'json';
+          break;
+        case 'application/octet-stream':
+          responseType = 'arrayBuffer';
+          break;
+        default:
+          responseType = 'text';
+          break;
       }
     }
 
-    const responseTypes = {
-      json: () => /** @type {Promise<JsonType | JsonType[]>} */(response.json()),
-      text: () => response.text(),
-      arrayBuffer: () => response.arrayBuffer()
-    };
-
-    return responseTypes[responseType]();
+    switch (responseType) {
+      case 'json':
+        return /** @type {Promise<JsonType | JsonType[]>} */ (response.json());
+      case 'text':
+        return response.text();
+      case 'arrayBuffer':
+        return response.arrayBuffer();
+    }
   }
 
   /**
@@ -191,7 +192,7 @@ export default class HttpApi {
    * @param {string=} params.traceId
    * @returns {LoggerOptions}
    */
-  getLoggerOptions({ traceId }) {
+  #getLoggerOptions({ traceId }) {
     return {
       metadata: {
         correlationId: traceId
